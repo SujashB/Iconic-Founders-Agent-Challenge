@@ -26,7 +26,7 @@ The dependency chain is strict: drafting depends on strategy, which depends on s
 ### Why LangGraph + Office365 toolkit specifically
 - **LangGraph** already installed; native fit for stateful graphs with conditional routing, retry loops, and tool nodes.
 - **Office365 toolkit** (`langchain-community`) gives us Graph-backed tools out of the box: `O365SearchEmails`, `O365SearchEvents`, `O365CreateDraftMessage`, `O365SendMessage`, `O365SendEvent`. We only call the search + create-draft tools; `SendMessage` is intentionally unused (human review gate).
-- **Tool calling for sentiment analysis** is wired as a first-class LangGraph tool node — the drafting LLM invokes an `analyze_sentiment` tool that returns structured signals (polarity, urgency, warmth, hesitation, intent). This keeps sentiment as a dedicated, testable, mockable step rather than buried in a prompt.
+- **Tool calling for sentiment analysis** is wired as a first-class LangGraph tool node, but the implementation is an external call to **Medallia Text Analytics via the Beam.ai Medallia integration** ([beam.ai/integrations/medallia](https://beam.ai/integrations/medallia/)). The node submits the relevant email text as a Medallia feedback entry through Beam.ai, polls until Medallia's Text Analytics Engine scores it, and maps the returned analytics fields onto our internal `SentimentSignals` schema (polarity, warmth, urgency, hesitation, intent). Keeping the LangGraph node interface unchanged means downstream stages (Strategy, Drafter) are unaffected — only the tool's *implementation* is a Beam.ai/Medallia round-trip rather than a homegrown LLM scorer.
 
 ---
 
@@ -85,6 +85,9 @@ The dependency chain is strict: drafting depends on strategy, which depends on s
                                    ▼
                     ┌──────────────────────────────┐
                     │ 3. Sentiment Analyzer        │  TOOL CALL: analyze_sentiment
+                    │                              │  → POSTs text to Medallia (via
+                    │                              │    Beam.ai integration), polls
+                    │                              │    Text Analytics, maps result
                     │                              │  → {polarity, warmth, urgency,
                     │                              │     hesitation, intent_signals}
                     │                              │  used to shape tone downstream
@@ -161,11 +164,11 @@ class EmailDraftState(TypedDict):
 | Tool-calling runtime | **LangChain tool bindings** via `langchain-anthropic` | Uniform tool interface for both O365 tools and the sentiment tool |
 | Outlook integration | **`langchain-community` Office365 toolkit** (`O365SearchEmails`, `O365SearchEvents`, `O365CreateDraftMessage`) | Exactly the tools the spec requires; wraps the `O365` Python lib |
 | O365 auth | **`O365` library** with Azure AD app registration, **delegated** OAuth flow, token cached locally (`o365_token.txt`, gitignored) | Standard path documented in the LangChain Office365 guide |
-| Sentiment tool | Custom LangChain `@tool` wrapping a focused Claude call that returns `SentimentSignals` (Pydantic) | Mockable for tests; keeps sentiment isolated |
+| Sentiment tool | LangChain `@tool analyze_sentiment` that calls **Beam.ai Medallia integration** → Medallia Text Analytics, then maps the response onto `SentimentSignals` (Pydantic). Falls back to a neutral profile if Medallia is unreachable or scoring exceeds `SENTIMENT_TIMEOUT_S`. | Uses Medallia's purpose-built CX text analytics rather than a homegrown LLM scorer; isolated behind the same `@tool` interface so the rest of the graph is unaffected; explicit timeout fallback keeps a third-party outage from blocking the whole pipeline |
 | Schemas | Pydantic v2 | Installed |
-| SDK | `anthropic` + `langchain-anthropic` + `langchain-community` + `O365` | To add to venv |
+| SDK | `anthropic` + `langchain-anthropic` + `langchain-community` + `O365` + Beam.ai client (`beam-sdk` or REST via `httpx`) | To add to venv |
 | Scheduler | Python `schedule` lib for dev; cron/Task Scheduler for prod; CLI `--run-now` flag for manual/demo | Keeps MVP demoable without requiring a daemon |
-| Config | `.env` via `python-dotenv` (gitignored): `ANTHROPIC_API_KEY`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_TENANT_ID`, `STALE_RA_DAYS`, `POST_MEETING_LOOKBACK_HOURS`, `RA_DOMAIN_ALLOWLIST` | User-configurable follow-up window lives here |
+| Config | `.env` via `python-dotenv` (gitignored): `ANTHROPIC_API_KEY`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_TENANT_ID`, `STALE_RA_DAYS`, `POST_MEETING_LOOKBACK_HOURS`, `RA_DOMAIN_ALLOWLIST`, `BEAM_API_KEY`, `MEDALLIA_TENANT`, `MEDALLIA_PROGRAM_ID`, `MEDALLIA_AUTH_TOKEN`, `SENTIMENT_TIMEOUT_S` (default 20), `SENTIMENT_POLL_INTERVAL_S` (default 2) | User-configurable follow-up window + Medallia/Beam credentials live here |
 
 ---
 
@@ -198,7 +201,7 @@ Iconic-Founders-Agent-Challenge/
 │   │   └── draft_writer.py             # O365CreateDraftMessage — the only write path
 │   ├── tools/
 │   │   ├── __init__.py
-│   │   ├── sentiment_tool.py           # @tool analyze_sentiment → SentimentSignals
+│   │   ├── medallia_sentiment.py       # @tool analyze_sentiment → Beam.ai → Medallia → SentimentSignals
 │   │   └── o365.py                     # thin wrapper building the toolkit + shared Account
 │   └── outlook_auth.py                 # one-time OAuth flow, token persistence
 ├── fixtures/                           # used when O365 auth isn't available (tests + demo fallback)
@@ -221,7 +224,7 @@ Iconic-Founders-Agent-Challenge/
 - `email_agent/prompts.py` — prompt quality drives output quality; most tuning time lives here
 - `email_agent/nodes/drafter.py` + `critic.py` — the quality-defining pair
 - `email_agent/scanners/*.py` — correctness of the triggers determines whether the right drafts get created at the right time
-- `email_agent/tools/sentiment_tool.py` — sentiment tool output schema shapes downstream strategy
+- `email_agent/tools/medallia_sentiment.py` — sentiment tool output schema shapes downstream strategy; also the only third-party non-Microsoft dependency on the hot path, so its timeout/fallback behavior is what protects the deadline
 - `email_agent/outlook_auth.py` + `tools/o365.py` — gate the entire proactive half of the system
 - `System Design/architecture.md` — scored directly against the "Communication" evaluation criterion
 
@@ -229,12 +232,20 @@ Iconic-Founders-Agent-Challenge/
 
 ## Implementation Steps
 
-1. **Dependencies.** `pip install anthropic langchain-anthropic langchain-community O365 python-dotenv schedule` into the existing venv. Freeze `requirements.txt`.
+1. **Dependencies.** `pip install anthropic langchain-anthropic langchain-community O365 python-dotenv schedule` into the existing venv, plus the Beam.ai client for the Medallia integration (`pip install beam-sdk` — substitute the actual published package name; if Beam.ai exposes only REST, fall back to using the already-installed `httpx`). Freeze `requirements.txt`.
 2. **Azure AD app registration.** One-time setup (documented in README): register an app in Entra ID, add delegated permissions `Mail.ReadWrite`, `Mail.Send`, `Calendars.Read`, `User.Read`, generate client secret, capture `CLIENT_ID` / `TENANT_ID` / `CLIENT_SECRET`.
 3. **Config + state** (`email_agent/config.py`, `state.py`). Define `TriggerEvent`, `SentimentSignals`, `EmailDraftState`, and load all user-configurable knobs from `.env`: `STALE_RA_DAYS` (default 10), `POST_MEETING_LOOKBACK_HOURS` (default 6), `RA_DOMAIN_ALLOWLIST`.
 4. **Outlook auth** (`email_agent/outlook_auth.py`). Wrap the `O365` `Account` object with delegated OAuth flow; persist token to `o365_token.txt` (gitignored). First run prompts browser consent; subsequent runs refresh silently.
 5. **O365 tool wrapper** (`email_agent/tools/o365.py`). Instantiate `O365Toolkit` from `langchain-community`, expose the individual tools (`O365SearchEmails`, `O365SearchEvents`, `O365CreateDraftMessage`) to downstream nodes.
-6. **Sentiment tool** (`email_agent/tools/sentiment_tool.py`). LangChain `@tool analyze_sentiment(text: str) -> SentimentSignals`. Implementation = focused Claude call with a tight system prompt returning structured Pydantic output. Unit-test against 3–5 hand-labeled snippets.
+6. **Sentiment tool** (`email_agent/tools/medallia_sentiment.py`). LangChain `@tool analyze_sentiment(text: str) -> SentimentSignals`. Implementation:
+   1. Authenticate against Beam.ai using `BEAM_API_KEY`.
+   2. Call the Beam.ai Medallia integration to **create a feedback entry** in `MEDALLIA_PROGRAM_ID` whose body is the email text under analysis. Tag the entry with a UUID so we can recover the result.
+   3. Poll the Medallia analytics endpoint (via Beam.ai or directly with `MEDALLIA_AUTH_TOKEN`) every `SENTIMENT_POLL_INTERVAL_S` seconds, waiting for the Text Analytics Engine to attach scores.
+   4. Map Medallia's analytics fields onto our `SentimentSignals` schema: Medallia sentiment polarity → `polarity`; Medallia "emotion intensity" → `warmth` (rescaled to 0.0–1.0); Medallia "urgency" topic score → `urgency`; Medallia hesitation/uncertainty topic → `hesitation`; Medallia top topics → `intent_signals`.
+   5. **Fallback**: if `SENTIMENT_TIMEOUT_S` is exceeded or any Beam.ai/Medallia call raises, return a neutral `SentimentSignals` (`polarity="neutral"`, all floats `0.5`, `intent_signals=[]`) and log a `sentiment.fallback` warning so the rest of the pipeline still produces a draft.
+   6. **Cleanup (optional)**: if `MEDALLIA_DELETE_AFTER_SCORE` is true, delete the temporary feedback entry so we do not pollute Medallia's program with throwaway records.
+
+   Unit-tested against 3–5 hand-labeled snippets using a mocked Beam.ai/Medallia client. Integration-tested once against a real Medallia sandbox program.
 7. **Scanners** (`email_agent/scanners/*.py`). Each returns `list[TriggerEvent]`. Run them concurrently with `asyncio.gather` (the one place parallelism is real):
    - **Post-meeting**: `O365SearchEvents` for events with `end >= now - POST_MEETING_LOOKBACK_HOURS` and `end < now`; filter to events with external attendees; dedupe against an already-drafted cache (`.agent_state/processed_events.json`).
    - **Stale follow-up**: `O365SearchEmails` on Sent folder for messages to RA domains in the last 90 days; for each, `O365SearchEmails` on Inbox looking for a reply in the same conversationId; flag if last reply older than `STALE_DAYS`; dedupe against `.agent_state/processed_stale.json`.
@@ -274,8 +285,10 @@ Iconic-Founders-Agent-Challenge/
 - **Stale follow-up**: set `STALE_RA_DAYS=1`, send a test email from a throwaway account to an RA-domain address, wait, run `scan --kind stale_followup`; confirm a soft-nudge draft is created. Re-run → should *not* double-draft (dedupe cache works).
 - **Inbound vague**: send a test "would love to connect sometime" email to the Outlook inbox from an RA-allowlisted address; run `scan --kind inbound_vague`; confirm a qualifying-question draft is created as a reply to the original thread.
 
-**Sentiment tool unit test:**
-- Feed 3 hand-labeled snippets: enthusiastic intro, hesitant busy exec, warm post-meeting close. Assert `polarity`, `warmth`, `hesitation` land in expected buckets.
+**Sentiment tool tests:**
+- **Unit (mocked):** stub the Beam.ai client to return canned Medallia analytics payloads for 3 hand-labeled snippets (enthusiastic intro, hesitant busy exec, warm post-meeting close); assert the field-mapping produces the expected `polarity` / `warmth` / `hesitation` buckets.
+- **Integration (one-shot):** with real `BEAM_API_KEY` + Medallia sandbox creds, run `python -m email_agent.tools.medallia_sentiment "Thanks for the great chat earlier — let's circle back next week."` and confirm a non-fallback `SentimentSignals` comes back inside the timeout budget.
+- **Fallback test:** point `BEAM_API_KEY` at an invalid value and confirm the tool returns the neutral fallback within `SENTIMENT_TIMEOUT_S` rather than raising.
 
 **Per-fixture functional checks (offline mode):**
 - `inbound_vague.json` → draft is warm, contains ≥1 qualifying question, does **not** propose a meeting time yet, <150 words.
@@ -302,6 +315,7 @@ Iconic-Founders-Agent-Challenge/
 3. **Parallel tone variants:** at the drafter step, generate warm/direct/formal in parallel, let the reviewer pick in Outlook via three separate draft messages.
 4. **Production scheduling:** move from `python agent_challenge1.py scan` cron to an Azure Function / Power Automate flow triggered on Graph webhook subscriptions for `messages` and `events`, so drafts appear near-instantly instead of on a poll.
 5. **Tone/sentiment calibration dashboard:** show the sentiment tool's output distribution against reviewer outcomes to catch drift.
+6. **Cache Medallia scores per `(sender, conversationId)`:** many drafts in this system are replies in long threads where the inbound side's sentiment does not move much between scans. Caching scored entries by conversation would cut Medallia round-trips dramatically and tighten the latency budget.
 
 ---
 
@@ -312,3 +326,5 @@ Iconic-Founders-Agent-Challenge/
 - **RA identification = domain allowlist** in `.env` for MVP. HubSpot integration is explicitly deferred to "what I'd build next."
 - **User-configurable windows** (`STALE_RA_DAYS`, `POST_MEETING_LOOKBACK_HOURS`) live in `.env` and can be overridden per-run via CLI flags.
 - **UI is stretch**, not MVP. CLI + Outlook drafts folder are enough for a demoable Loom.
+- **Sentiment provider = Medallia Text Analytics, accessed via the Beam.ai Medallia integration.** Requires a Beam.ai account and a Medallia program ID + auth token. The Beam.ai integration is used for the write path (creating feedback entries); the read path may go through Beam.ai or directly to Medallia depending on which surface exposes scored entries first.
+- **Medallia is on the critical path of every draft.** A `SENTIMENT_TIMEOUT_S` fallback to neutral sentiment exists so a Medallia outage degrades draft quality but does not block the pipeline.
