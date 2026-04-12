@@ -1,0 +1,21 @@
+{
+  "kind": "POST_MEETING",
+  "source_ref": "AAMkAGI2-fixture-event-001",
+  "detected_at": "2026-04-11T14:32:00Z",
+  "raw_payload": {
+    "subject": "IFG / Linwood — intro call",
+    "organizer_name": "Elena Park",
+    "organizer_email": "epark@cepa-advisors.com",
+    "attendees": [
+      "epark@cepa-advisors.com",
+      "sam@iconicfounders.com",
+      "tlinwood@linwoodmfg.com"
+    ],
+    "body": "Intro call between Sam (IFG), Elena Park (CEPA advisor at Cepa Advisors), and Tom Linwood, founder-CEO of Linwood Manufacturing. Tom is exploring a potential exit in the 18-24 month window. Discussed valuation expectations (he's anchored around 8x EBITDA based on a comp from a competitor sale last year), customer concentration risk (top 3 customers = 52% of revenue), and the fact that his COO is not yet ready to step into a CEO role post-transaction. Elena is helping him on the personal financial planning side. Sam offered to put together a one-page market read on multiples in his segment and to walk through what a typical IFG-led process looks like. Agreed to reconvene in two weeks.",
+    "next_steps": [
+      "Sam to send a one-page market read on multiples in Tom's segment within 1 week",
+      "Sam to share IFG's standard process timeline document",
+      "Reconvene as a group in two weeks to discuss Tom's reaction and decide next steps"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "INBOUND_VAGUE",
+  "source_ref": "AAMkAGI2-fixture-inbound-001",
+  "detected_at": "2026-04-11T14:32:00Z",
+  "raw_payload": {
+    "subject": "Quick connect?",
+    "sender_name": "Marcus Halloran",
+    "sender_email": "mhalloran@acmewealth.com",
+    "sender_org": "Acme Wealth Partners",
+    "sender": "mhalloran@acmewealth.com",
+    "body": "Hi Sam,\n\nHope you're doing well. I came across IFG through a colleague and wanted to see if there might be a good time for a quick chat in the coming weeks. Always interesting to swap notes with folks in the M&A advisory space.\n\nLet me know what works.\n\nBest,\nMarcus\nAcme Wealth Partners",
+    "thread_summary": "First-touch email from a wealth manager. No prior history. No specific deal or client mentioned."
+  }
+}
