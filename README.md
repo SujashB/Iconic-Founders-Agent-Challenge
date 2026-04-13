@@ -147,6 +147,8 @@ Each scanner remembers what it has already processed in
 
 ## What the demo shows
 
+- **`DEMO_SCRIPT.md`** — a click-by-click, non-technical presenter script for
+  walking M&A advisory audiences through the web app from start to finish.
 - **`outputs/draft_inbound_vague.md`** — soft qualifying reply to a generic
   wealth-manager outreach. Asks for context once, no pressure, no calendar
   link.
