@@ -1,0 +1,20 @@
+{
+  "kind": "POST_MEETING",
+  "source_ref": "AAMkAGI2-fixture-event-003",
+  "detected_at": "2026-04-12T16:45:00Z",
+  "raw_payload": {
+    "subject": "IFG / referral partner discussion",
+    "organizer_name": "Nate Brooks",
+    "organizer_email": "nbrooks@buildright-insurance.com",
+    "attendees": [
+      "nbrooks@buildright-insurance.com",
+      "sam@iconicfounders.com"
+    ],
+    "body": "Introductory call between Sam and Nate Brooks, a construction insurance broker at BuildRight. Nate works with several specialty trade contractors between $3M and $8M EBITDA. Discussed how IFG evaluates founder readiness, why customer concentration and owner dependency affect buyer appetite, and how Nate can spot a client who might benefit from an early market-read conversation. Sam offered to send a one-page overview of IFG's referral advocate process and examples of questions Nate can use with owners. They agreed to reconnect in two weeks after Nate identifies one or two clients who may be ready for a discreet conversation.",
+    "next_steps": [
+      "Sam to send IFG's referral advocate process overview",
+      "Sam to share owner-readiness questions Nate can use with clients",
+      "Reconnect in two weeks after Nate identifies one or two potential clients"
+    ]
+  }
+}

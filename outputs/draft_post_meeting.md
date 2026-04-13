@@ -1,10 +1,14 @@
 # Draft — POST_MEETING
 
 **To:** epark@cepa-advisors.com
-**Subject:** (drafting failed)
+**Subject:** Re: IFG / Linwood — intro call
 
 ---
 
-Drafting failed: Error code: 402 - {'error': {'message': 'This request requires more credits, or fewer max_tokens. You requested up to 900 tokens, but can only afford 266. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account', 'code': 402, 'metadata': {'provider_name': None}}, 'user_id': 'user_3CEtrh6TB1eNxL9niIBrjWSDKdt'}
+Hi Elena,
 
+Thank you for the conversation earlier. I appreciated the discussion around the 18-24 month exit window, valuation expectations, and customer concentration.
 
+I will send a one-page market read on multiples in Tom's segment within 1 week and share IFG's standard process timeline document. Would it make sense to reconvene as a group in two weeks to discuss Tom's reaction and decide next steps?
+
+Sam

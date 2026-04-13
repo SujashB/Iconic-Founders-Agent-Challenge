@@ -114,8 +114,8 @@ guide above. Follow the strategy brief exactly. Output JSON ONLY in this shape:
 
 {
   "subject": "...",
-  "body": "the full body of the email, no signature, no greeting line",
-  "signature": "Best,\\nSam"
+  "body": "the full body of the email, including greeting, no signature",
+  "signature": "Sam"
 }
 
 Hard rules:
@@ -124,6 +124,7 @@ Hard rules:
 - No more than one ask.
 - Use the recipient's first name once.
 - Reference at least one concrete fact from the context.
+- Do not put "Best," or "Sam" in the body. The signature field handles that.
 - Stay inside the strategy's target_word_count (±15%).
 """
 

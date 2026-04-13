@@ -66,15 +66,48 @@ def _sse(event: str, data: dict) -> dict:
 # ── routes ───────────────────────────────────────────────────────
 
 @app.get("/api/status")
-def status():
+async def status():
     acct = get_account()
     fixtures = sorted(p.stem for p in CONFIG.fixtures_dir.glob("*.json"))
+
+    # Check Composio MCP connectivity
+    composio_connected = False
+    composio_tools: list[str] = []
+    if CONFIG.has_composio:
+        try:
+            from email_agent.tools.composio_outlook import list_tools_sync
+            tools = await asyncio.to_thread(list_tools_sync)
+            composio_connected = len(tools) > 0
+            composio_tools = [t["name"] for t in tools]
+        except Exception as exc:
+            log.warning("composio status check failed: %s", exc)
+
     return {
         "o365_connected": acct is not None and acct.is_authenticated,
-        "openrouter_configured": bool(CONFIG.openrouter_api_key),
+        "composio_configured": CONFIG.has_composio,
+        "composio_connected": composio_connected,
+        "composio_tools": composio_tools,
+        "llm_provider": "ollama",
+        "llm_model": CONFIG.ollama_model,
+        "sentiment_llm_model": CONFIG.sentiment_ollama_model,
+        "llm_configured": bool(CONFIG.ollama_model and CONFIG.ollama_base_url),
         "beam_configured": CONFIG.has_beam_creds,
         "fixtures": fixtures,
     }
+
+
+@app.get("/api/mcp/tools")
+async def mcp_tools():
+    """List all available Composio MCP tools."""
+    if not CONFIG.has_composio:
+        return {"error": "Composio not configured", "tools": []}
+    try:
+        from email_agent.tools.composio_outlook import list_tools_sync
+        tools = await asyncio.to_thread(list_tools_sync)
+        return {"tools": tools}
+    except Exception as exc:
+        log.error("mcp tools listing failed: %s", exc)
+        return {"error": str(exc), "tools": []}
 
 
 @app.get("/api/run/fixture/{name}")
@@ -197,6 +230,113 @@ async def run_scan(kind: str):
             })
 
     return EventSourceResponse(_stream())
+
+
+SAMPLE_EMAILS = [
+    {
+        "sender_name": "Marcus Webb",
+        "sender_email": "marcus@acmewealth.com",
+        "subject": "Quick connect?",
+        "body": (
+            "Hi Sam,\n\nHope you're doing well. I came across IFG through a colleague "
+            "and wanted to see if there might be a good time for a quick chat in the "
+            "coming weeks. Always interesting to swap notes with folks in the M&A "
+            "advisory space.\n\nLet me know what works.\n\nBest,\nMarcus\n"
+            "Acme Wealth Partners"
+        ),
+    },
+    {
+        "sender_name": "Jennifer Liu",
+        "sender_email": "jliu@buildright-insurance.com",
+        "subject": "Possible intro — client exploring options",
+        "body": (
+            "Sam,\n\nOne of our portfolio company founders has been asking questions "
+            "about timing for a sale process. Revenue is in the $15-20M range, "
+            "SaaS vertical. Thought IFG might be a good fit. Can we set up a call "
+            "this week?\n\nThanks,\nJennifer Liu\nSilverline Capital Partners"
+        ),
+    },
+    {
+        "sender_name": "Robert Chen",
+        "sender_email": "robert.chen@cepa-advisors.com",
+        "subject": "Re: Follow-up from industry event",
+        "body": (
+            "Hi Sam,\n\nGreat meeting you at the PE conference last week. I wanted "
+            "to follow up on our conversation about deal flow in the healthcare "
+            "services sector. We have a few clients in that space who might benefit "
+            "from IFG's approach.\n\nWould love to continue the conversation. "
+            "What does your schedule look like?\n\nBest regards,\nRobert Chen\n"
+            "Apex Advisory Group"
+        ),
+    },
+]
+
+SAMPLE_EMAIL_TARGET = "sjbarman@ucdavis.edu"
+SAMPLE_FIXTURE_NAMES = ["inbound_vague", "outbound_followup", "post_meeting"]
+
+
+@app.post("/api/seed-inbox")
+async def seed_inbox():
+    """Place raw sample emails into the connected Outlook inbox for live scans."""
+    if not CONFIG.has_composio:
+        return {"error": "Composio not configured"}
+
+    from email_agent.tools.composio_outlook import seed_message_to_inbox
+
+    results = []
+    for email in SAMPLE_EMAILS:
+        try:
+            sender_name = email.get("sender_name", "External Contact")
+            sender_email = email.get("sender_email", "")
+            if not sender_email:
+                raise ValueError("sample email is missing sender_email")
+            result = await asyncio.to_thread(
+                seed_message_to_inbox,
+                email["subject"],
+                email["body"],
+                sender_name,
+                sender_email,
+            )
+            if result is None:
+                raise RuntimeError("Composio seed operation returned no result")
+            results.append({"subject": email["subject"], "status": "seeded", "result": str(result)})
+        except Exception as exc:
+            results.append({"subject": email["subject"], "status": "error", "error": str(exc)})
+    seeded = sum(result["status"] == "seeded" for result in results)
+    return {"seeded": seeded, "results": results}
+
+
+def _build_ifg_sample_email(fixture_name: str) -> tuple[str, str]:
+    fixture_path = CONFIG.fixtures_dir / f"{fixture_name}.json"
+    data = json.loads(fixture_path.read_text())
+    trigger = TriggerEvent(**data)
+    result = build_graph().invoke({"trigger": trigger, "retry_count": 0})
+    draft = result.get("final_draft")
+    if draft is None:
+        raise RuntimeError(result.get("error") or f"no draft produced for {fixture_name}")
+    return draft.subject, f"{draft.body}\n\n{draft.signature}".strip()
+
+
+@app.post("/api/send-sample-emails")
+async def send_sample_emails():
+    """Generate IFG draft replies from fixtures and send them to the demo inbox."""
+    if not CONFIG.has_composio:
+        return {"error": "Composio not configured"}
+
+    from email_agent.tools.composio_outlook import send_email
+
+    results = []
+    for fixture_name in SAMPLE_FIXTURE_NAMES:
+        try:
+            subject, body = await asyncio.to_thread(_build_ifg_sample_email, fixture_name)
+            result = await asyncio.to_thread(send_email, SAMPLE_EMAIL_TARGET, subject, body)
+            if result is None:
+                raise RuntimeError("Composio OUTLOOK_SEND_EMAIL returned no result")
+            results.append({"fixture": fixture_name, "subject": subject, "status": "sent", "result": str(result)})
+        except Exception as exc:
+            results.append({"fixture": fixture_name, "status": "error", "error": str(exc)})
+    sent = sum(result["status"] == "sent" for result in results)
+    return {"target": SAMPLE_EMAIL_TARGET, "sent": sent, "results": results}
 
 
 @app.get("/api/run/scan")

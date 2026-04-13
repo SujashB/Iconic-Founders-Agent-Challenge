@@ -16,31 +16,40 @@ from email_agent.state import SentimentSignals
 
 POSITIVE_TERMS = {
     "thanks", "thank you", "appreciate", "great", "glad", "happy", "excited",
-    "looking forward", "pleasure", "wonderful", "perfect", "love",
+    "looking forward", "pleasure", "wonderful", "perfect", "love", "helpful",
+    "useful", "good fit", "benefit", "enjoyed", "productive", "appreciated",
 }
 NEGATIVE_TERMS = {
     "concern", "worried", "issue", "problem", "frustrated", "disappointed",
     "unhappy", "delay", "stuck", "blocker", "unfortunately", "regret",
+    "risk", "not ready", "concentration", "dependency", "gap", "no reply",
+    "haven't heard", "hasn't replied", "silent",
 }
 URGENCY_TERMS = {
     "asap", "urgent", "today", "right away", "tomorrow", "deadline", "by eod",
-    "by end of", "soon", "quickly", "time-sensitive", "this week",
+    "by end of", "soon", "quickly", "time-sensitive", "this week", "next week",
+    "within 1 week", "within a week", "near term", "coming weeks",
 }
 HESITATION_TERMS = {
     "maybe", "perhaps", "not sure", "might", "thinking about", "considering",
     "exploring", "wondering", "could be", "i guess", "if it works",
-    "no rush", "whenever",
+    "no rush", "whenever", "potential", "starting to think", "not yet",
+    "not ready", "risk", "concentration", "dependency", "anchored",
 }
 INTENT_PATTERNS = [
     (r"\bquick (chat|call|connect)\b", "introductory_chat"),
+    (r"\bconnect\b", "introductory_chat"),
     (r"\bswap notes\b", "peer_exchange"),
-    (r"\b(exit|sale|sell|sale-side)\b", "exit_intent"),
-    (r"\bvaluation\b", "valuation_question"),
+    (r"\b(exit|sale|sell|sale-side|transaction)\b", "exit_intent"),
+    (r"\bvaluation|multiple(s)?|ebitda|8x\b", "valuation_question"),
     (r"\bbuyer(s)?\b", "buyer_interest"),
-    (r"\bclient(s)?\b", "client_referral"),
+    (r"\bclient(s)?|founder(s)?|portfolio company\b", "client_referral"),
     (r"\bcoverage\b", "coverage_gap"),
     (r"\bfollow.?up\b", "followup"),
     (r"\bnext steps?\b", "next_steps"),
+    (r"\bmarket read\b", "market_read_request"),
+    (r"\b(concentration|coo|not ready|risk|dependency)\b", "concern_or_risk"),
+    (r"\breconvene|walk through|timeline\b", "next_steps"),
 ]
 
 

@@ -41,7 +41,16 @@ def _get_list(key: str, default: list[str] | None = None) -> list[str]:
 
 @dataclass(frozen=True)
 class Config:
-    # LLM (routed through OpenRouter's OpenAI-compatible Chat Completions API)
+    # LLM (local Ollama)
+    ollama_model: str = field(default_factory=lambda: _get("OLLAMA_MODEL", "qwen3:1.7b"))
+    sentiment_ollama_model: str = field(
+        default_factory=lambda: _get("SENTIMENT_OLLAMA_MODEL", "deepseek-r1:1.5b")
+    )
+    ollama_base_url: str = field(
+        default_factory=lambda: _get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    )
+
+    # Legacy OpenRouter settings. Kept so existing .env files do not break.
     openrouter_api_key: str = field(default_factory=lambda: _get("OPENROUTER_API_KEY"))
     openrouter_model: str = field(
         default_factory=lambda: _get("OPENROUTER_MODEL", "anthropic/claude-opus-4.6-fast")
@@ -80,6 +89,17 @@ class Config:
         default_factory=lambda: _get_bool("MEDALLIA_DELETE_AFTER_SCORE", True)
     )
 
+    # Composio MCP (alternative to direct O365)
+    use_composio: bool = field(default_factory=lambda: _get_bool("USE_COMPOSIO", True))
+    composio_api_key: str = field(default_factory=lambda: _get("COMPOSIO_API_KEY"))
+    composio_mcp_url: str = field(
+        default_factory=lambda: _get(
+            "COMPOSIO_MCP_URL",
+            "https://backend.composio.dev/v3/mcp/192481e1-141c-47b8-9c1a-2763908f9250"
+            "/mcp?user_id=pg-test-Ha3tSUoFsCRq17bfBBFH2E698ijlzQlC",
+        )
+    )
+
     # Paths
     state_dir: Path = field(default_factory=lambda: REPO_ROOT / ".agent_state")
     fixtures_dir: Path = field(default_factory=lambda: REPO_ROOT / "fixtures")
@@ -88,6 +108,10 @@ class Config:
     @property
     def has_o365_creds(self) -> bool:
         return bool(self.ms_client_id and self.ms_client_secret and self.ms_tenant_id)
+
+    @property
+    def has_composio(self) -> bool:
+        return bool(self.use_composio and self.composio_mcp_url)
 
     @property
     def has_beam_creds(self) -> bool:

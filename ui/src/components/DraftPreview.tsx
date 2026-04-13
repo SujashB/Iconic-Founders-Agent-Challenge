@@ -4,6 +4,31 @@ interface Props {
   state: PipelineState;
 }
 
+/** Render a flat key-value record as readable plain text lines. */
+function renderPlainText(data: Record<string, unknown>): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    if (value === null || value === undefined || value === "") continue;
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue;
+      lines.push(`${label}: ${value.join(", ")}`);
+    } else if (typeof value === "object") {
+      // Nested object — flatten one level
+      const nested = value as Record<string, unknown>;
+      lines.push(`${label}:`);
+      for (const [k, v] of Object.entries(nested)) {
+        if (v === null || v === undefined || v === "") continue;
+        const subLabel = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        lines.push(`  ${subLabel}: ${Array.isArray(v) ? v.join(", ") : String(v)}`);
+      }
+    } else {
+      lines.push(`${label}: ${String(value)}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 export function DraftPreview({ state }: Props) {
   const { finalDraft, outlookDraftId, error, nodeDeltas, log } = state;
 
@@ -33,35 +58,35 @@ export function DraftPreview({ state }: Props) {
       {context && (
         <div className="data-section">
           <div className="section-label">Context Extracted</div>
-          <pre>{JSON.stringify(context, null, 2)}</pre>
+          <pre>{renderPlainText(context)}</pre>
         </div>
       )}
 
       {sentiment && (
         <div className="data-section">
           <div className="section-label">Sentiment Signals</div>
-          <pre>{JSON.stringify(sentiment, null, 2)}</pre>
+          <pre>{renderPlainText(sentiment)}</pre>
         </div>
       )}
 
       {strategy && (
         <div className="data-section">
           <div className="section-label">Strategy</div>
-          <pre>{JSON.stringify(strategy, null, 2)}</pre>
+          <pre>{renderPlainText(strategy)}</pre>
         </div>
       )}
 
       {draft && (
         <div className="data-section">
           <div className="section-label">Draft</div>
-          <pre>{JSON.stringify(draft, null, 2)}</pre>
+          <pre>{renderPlainText(draft)}</pre>
         </div>
       )}
 
       {critique && (
         <div className="data-section">
           <div className="section-label">Critic</div>
-          <pre>{JSON.stringify(critique, null, 2)}</pre>
+          <pre>{renderPlainText(critique)}</pre>
         </div>
       )}
 

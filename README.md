@@ -27,18 +27,18 @@ email_agent/
   graph.py                   LangGraph StateGraph wiring
   state.py                   Pydantic + TypedDict state schemas
   prompts.py                 IFG voice guide + per-stage system prompts
-  llm.py                     ChatOpenAI factory (OpenRouter → Claude)
+  llm.py                     ChatOpenAI factory (local Ollama → Qwen + DeepSeek sentiment)
   config.py                  env-driven config singleton
   outlook_auth.py            one-shot OAuth bootstrap + smoke test
   scanners/                  post_meeting / stale_followup / inbound_vague
   nodes/                     one file per pipeline station
   agents/
-    sentiment_agent.py       ReAct subagent (Medallia + heuristic tools)
+    sentiment_agent.py       DeepSeek sentiment subagent (Medallia + heuristic merge)
   tools/
     medallia_sentiment.py    Beam.ai → Medallia Text Analytics → SentimentSignals
     heuristic_sentiment.py   Local keyword/regex scorer (no network)
     o365.py                  shared O365 Account / toolkit factory
-fixtures/                    one offline JSON per scenario
+fixtures/                    offline JSON test cases for each scenario
 outputs/                     markdown copies of the produced drafts
 System Design/
   implementation_plan.md     full design doc
@@ -64,17 +64,21 @@ cp .env.example .env
 ```
 
 Then fill in `.env`. The minimum to get an end-to-end run against fixtures
-(no Outlook, no Medallia) is just:
+(no Outlook, no Medallia) is a running local Ollama server with Qwen and
+DeepSeek:
 
 ```
-OPENROUTER_API_KEY=sk-or-v1-...
+ollama serve
+ollama pull qwen3:1.7b
+ollama pull deepseek-r1:1.5b
 ```
 
 Everything else has graceful fallbacks:
 
 | Section | Required for | Fallback if missing |
 |---|---|---|
-| `OPENROUTER_API_KEY` | LLM stations (classifier, strategy, drafter, critic, sentiment subagent) | Hard error — pipeline cannot run |
+| `OLLAMA_MODEL` / `OLLAMA_BASE_URL` | Main LLM stations (classifier, strategy, drafter, critic) | Defaults to local `qwen3:1.7b` at `http://localhost:11434/v1` |
+| `SENTIMENT_OLLAMA_MODEL` | Sentiment subagent | Defaults to local `deepseek-r1:1.5b`; falls back to deterministic local sentiment if DeepSeek output is not parseable |
 | `MS_CLIENT_ID` / `MS_CLIENT_SECRET` / `MS_TENANT_ID` | Live scanners + writing into Outlook Drafts | Offline-only mode; markdown drafts still written under `outputs/` |
 | `BEAM_API_KEY` + `MEDALLIA_*` | Real sentiment scoring | Neutral `SentimentSignals(source="fallback")` — pipeline keeps moving |
 | `RA_DOMAIN_ALLOWLIST` | Filtering scanner hits to RAs | Empty list → scanners produce nothing |

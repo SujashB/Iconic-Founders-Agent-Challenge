@@ -1,88 +1,135 @@
 """Sentiment subagent.
 
-A small ReAct-style agent that lives inside the macro email-drafting workflow.
-It is the *only* place in the pipeline where the LLM gets tool-calling autonomy
-— every other stage (classifier, strategy, drafter, critic) is a single LLM
-call with a fixed contract. Sentiment is the exception because it has two
-genuinely different tools to choose between:
-
-  1. `analyze_sentiment` — Beam.ai → Medallia Text Analytics. Authoritative
-     when available, but a third-party round-trip with timeout/outage risk.
-  2. `heuristic_sentiment` — local keyword/regex scorer. Always returns,
-     no network, weaker signal.
-
-The subagent is told to prefer Medallia when configured, fall back to the
-heuristic on failure, and emit a single SentimentSignals object via
-structured output. The macro workflow's sentiment node calls this subagent
-and treats its `structured_response` as the new state["sentiment"].
-
-If the subagent itself fails (no API key, all tools error, parsing breaks),
-the caller falls back to a neutral SentimentSignals so the rest of the
-pipeline never blocks on sentiment.
+The sentiment station uses DeepSeek via local Ollama as a focused scorer, then
+merges that judgment with deterministic local heuristics and Medallia when it is
+configured. This avoids the prior failure mode where a small local chat model
+missed structured tool output and collapsed sentiment back to neutral.
 """
 from __future__ import annotations
 
+import json
 import logging
-from functools import lru_cache
+from typing import Any
 
-from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from email_agent.config import CONFIG
-from email_agent.llm import get_chat_model
+from email_agent.llm import get_sentiment_chat_model
+from email_agent.nodes._util import extract_json
 from email_agent.state import SentimentSignals
-from email_agent.tools.heuristic_sentiment import heuristic_sentiment
-from email_agent.tools.medallia_sentiment import analyze_sentiment
+from email_agent.tools.heuristic_sentiment import heuristic_sentiment_impl
+from email_agent.tools.medallia_sentiment import analyze_sentiment_impl
 
 log = logging.getLogger("email_agent.sentiment_agent")
 
-SENTIMENT_AGENT_SYSTEM = """You are the Sentiment subagent inside the IFG
-email-drafting pipeline. Your one job: produce a SentimentSignals object that
-captures the emotional and intent shape of a piece of email or meeting text,
-so the downstream Drafter can match tone.
+ALLOWED_INTENT_SIGNALS = {
+    "introductory_chat",
+    "peer_exchange",
+    "client_referral",
+    "exit_intent",
+    "valuation_question",
+    "buyer_interest",
+    "market_read_request",
+    "next_steps",
+    "followup",
+    "coverage_gap",
+    "concern_or_risk",
+}
 
-You have two tools:
-  - analyze_sentiment(text): Beam.ai → Medallia Text Analytics. Authoritative.
-    May fall back to neutral on its own if Medallia is unconfigured or
-    unreachable — you can detect this by checking the returned `source` field:
-    "medallia" means real scoring, "fallback" means it returned a neutral stub.
-  - heuristic_sentiment(text): local keyword/regex scorer. Always returns
-    something. Source is always "fallback". Useful when Medallia returned a
-    fallback, AND for cross-checking intent_signals (it extracts named
-    intents from regex patterns that Medallia's generic Text Analytics
-    sometimes misses).
+SENTIMENT_AGENT_SYSTEM = """You are a sentiment analyst for IFG's M&A email
+drafting workflow. Score the text for how the reply should sound.
 
-PROCEDURE
-1. Always call `analyze_sentiment` first.
-2. If its `source` is "medallia", that is your primary signal. Then call
-   `heuristic_sentiment` to enrich the `intent_signals` list with any
-   IFG-specific labels Medallia missed. Merge by taking the union.
-3. If its `source` is "fallback" (Medallia unconfigured or unreachable),
-   call `heuristic_sentiment` and use its output as the primary signal.
-4. Produce ONE final SentimentSignals object via structured output. Do not
-   call any tool more than twice.
+Return JSON only in this exact shape:
+{
+  "polarity": "positive" | "neutral" | "negative",
+  "warmth": 0.0-1.0,
+  "urgency": 0.0-1.0,
+  "hesitation": 0.0-1.0,
+  "intent_signals": ["up to five short snake_case labels"]
+}
 
-RULES
-- Do not invent signals that no tool returned.
-- Keep `intent_signals` to at most 5 labels.
-- `polarity` must be one of: "positive", "neutral", "negative".
-- `source` should reflect where the dominant signal came from: "medallia"
-  if Medallia returned real scoring, "fallback" otherwise.
+Definitions:
+- warmth: friendliness, openness, gratitude, collaborative tone.
+- urgency: time pressure, near-term asks, this-week language, deadline pressure.
+- hesitation: uncertainty, exploration, risk, reluctance, tentative sale timing.
+- intent_signals: use M&A-specific labels such as introductory_chat,
+  client_referral, exit_intent, valuation_question, buyer_interest,
+  market_read_request, next_steps, followup, concern_or_risk.
+
+Be conservative. Do not mark positive just because the email is polite. Treat
+valuation risk, customer concentration, leadership dependency, no-reply threads,
+and "exploring" language as meaningful hesitation even when the tone is warm.
 """
 
 
-@lru_cache(maxsize=1)
-def _build_agent():
-    """Build the sentiment subagent once and cache it."""
-    if not CONFIG.openrouter_api_key:
-        return None
+def _clamp(raw: Any, default: float) -> float:
+    try:
+        return max(0.0, min(1.0, float(raw)))
+    except (TypeError, ValueError):
+        return default
 
-    model = get_chat_model(temperature=0.1, max_tokens=600)
-    return create_agent(
-        model=model,
-        tools=[analyze_sentiment, heuristic_sentiment],
-        system_prompt=SENTIMENT_AGENT_SYSTEM,
-        response_format=SentimentSignals,
-        name="sentiment_subagent",
+
+def _merge_intents(*items: list[str]) -> list[str]:
+    seen: list[str] = []
+    for labels in items:
+        for label in labels:
+            normalized = str(label).strip().lower().replace(" ", "_")
+            if normalized in ALLOWED_INTENT_SIGNALS and normalized not in seen:
+                seen.append(normalized)
+    return seen[:5]
+
+
+def _merge_polarity(base: str, refined: str, text: str, hesitation: float) -> str:
+    if refined not in ("positive", "neutral", "negative"):
+        return base
+    text_lc = text.lower()
+    caution_terms = ("risk", "concentration", "not ready", "dependency", "no reply", "haven't heard")
+    if refined == "positive" and (base == "negative" or hesitation >= 0.65 or any(t in text_lc for t in caution_terms)):
+        return "neutral" if base == "neutral" else base
+    return refined
+
+
+def _dominant_base_signal(text: str) -> SentimentSignals:
+    medallia = analyze_sentiment_impl(text)
+    heuristic = heuristic_sentiment_impl(text)
+    if medallia.source == "medallia":
+        return SentimentSignals(
+            polarity=medallia.polarity,
+            warmth=medallia.warmth,
+            urgency=max(medallia.urgency, heuristic.urgency),
+            hesitation=max(medallia.hesitation, heuristic.hesitation),
+            intent_signals=_merge_intents(medallia.intent_signals, heuristic.intent_signals),
+            source="medallia",
+        )
+    return heuristic
+
+
+def _deepseek_signal(text: str, base: SentimentSignals) -> SentimentSignals | None:
+    model = get_sentiment_chat_model(temperature=0.0, max_tokens=700)
+    user = (
+        f"Baseline local signal:\n{json.dumps(base.model_dump(), indent=2)}\n\n"
+        f"Text to score:\n{text}"
+    )
+    response = model.invoke(
+        [SystemMessage(content=SENTIMENT_AGENT_SYSTEM), HumanMessage(content=user)]
+    )
+    content = response.content if isinstance(response.content, str) else str(response.content)
+    data = extract_json(content)
+    urgency = max(base.urgency, _clamp(data.get("urgency"), base.urgency))
+    hesitation = max(base.hesitation, _clamp(data.get("hesitation"), base.hesitation))
+    polarity = _merge_polarity(base.polarity, data.get("polarity", base.polarity), text, hesitation)
+    warmth = _clamp(data.get("warmth"), base.warmth)
+    if polarity == "negative":
+        warmth = min(warmth, 0.45)
+    elif hesitation >= 0.65 and "concern_or_risk" in base.intent_signals:
+        warmth = min(warmth, 0.6)
+    return SentimentSignals(
+        polarity=polarity,
+        warmth=warmth,
+        urgency=urgency,
+        hesitation=hesitation,
+        intent_signals=_merge_intents(base.intent_signals, data.get("intent_signals", [])),
+        source=base.source,
     )
 
 
@@ -94,28 +141,19 @@ def run_sentiment_subagent(text: str) -> SentimentSignals:
         log.info("sentiment_subagent: empty text, returning neutral")
         return SentimentSignals()
 
-    agent = _build_agent()
-    if agent is None:
-        log.warning("sentiment_subagent: OPENROUTER_API_KEY not set, returning neutral")
-        return SentimentSignals()
+    base = _dominant_base_signal(text)
 
     try:
-        result = agent.invoke({"messages": [("user", f"Analyze this text:\n\n{text}")]})
+        refined = _deepseek_signal(text, base)
     except Exception as exc:  # noqa: BLE001
-        log.warning("sentiment_subagent: invocation failed: %s", exc)
-        return SentimentSignals()
+        log.warning(
+            "sentiment_subagent: DeepSeek refinement failed for %s, using baseline: %s",
+            CONFIG.sentiment_ollama_model,
+            exc,
+        )
+        return base
 
-    structured = result.get("structured_response")
-    if isinstance(structured, SentimentSignals):
-        return structured
-    if isinstance(structured, dict):
-        try:
-            return SentimentSignals(**structured)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("sentiment_subagent: structured_response not parseable: %s", exc)
-
-    log.warning("sentiment_subagent: no structured_response, returning neutral")
-    return SentimentSignals()
+    return refined or base
 
 
 if __name__ == "__main__":

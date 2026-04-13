@@ -1,0 +1,14 @@
+{
+  "kind": "OUTBOUND_FOLLOWUP",
+  "source_ref": "AAMkAGI2-fixture-outbound-002",
+  "detected_at": "2026-04-12T16:25:00Z",
+  "raw_payload": {
+    "subject": "Checking on the CEPA owner planning conversation",
+    "recipient_name": "Priya Shah",
+    "recipient_email": "pshah@cepa-advisors.com",
+    "recipient_org": "CEPA Advisors",
+    "thread_summary": "We sent Priya a note 12 days ago after she mentioned several owner-clients were beginning succession and exit planning conversations. No reply since.",
+    "last_outbound_excerpt": "Hi Priya - you mentioned a few owner-clients beginning succession and exit planning work. IFG has been seeing useful buyer behavior across founder-owned services businesses, and I thought a short market read might be helpful as you advise them. Would it be useful to compare notes next week? - Sam",
+    "days_since_last_touch": 12
+  }
+}

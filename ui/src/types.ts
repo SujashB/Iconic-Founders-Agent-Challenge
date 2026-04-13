@@ -2,7 +2,13 @@ export type NodeStatus = "idle" | "active" | "complete" | "skipped" | "error";
 
 export interface StatusResponse {
   o365_connected: boolean;
-  openrouter_configured: boolean;
+  composio_configured: boolean;
+  composio_connected: boolean;
+  composio_tools: string[];
+  llm_provider: string;
+  llm_model: string;
+  sentiment_llm_model: string;
+  llm_configured: boolean;
   beam_configured: boolean;
   fixtures: string[];
 }

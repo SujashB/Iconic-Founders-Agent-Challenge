@@ -1,0 +1,14 @@
+{
+  "kind": "INBOUND_VAGUE",
+  "source_ref": "AAMkAGI2-fixture-inbound-003",
+  "detected_at": "2026-04-12T16:18:00Z",
+  "raw_payload": {
+    "subject": "Worth a quick intro?",
+    "sender_name": "Caleb Martin",
+    "sender_email": "cmartin@acmewealth.com",
+    "sender_org": "Acme Wealth Partners",
+    "sender": "cmartin@acmewealth.com",
+    "body": "Sam,\n\nI have heard good things about IFG from a few folks in the market. I spend a lot of time with blue-collar founders and figured it would be good for us to know each other.\n\nWould you be open to a quick intro call?\n\nCaleb",
+    "thread_summary": "Referral-adjacent wealth advisor asking for a generic intro. No named owner, industry, or immediate opportunity."
+  }
+}

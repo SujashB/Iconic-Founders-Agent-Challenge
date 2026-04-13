@@ -1,14 +1,8 @@
 """LLM client factory.
 
-All LLM calls in this project go through OpenRouter's OpenAI-compatible
-Chat Completions endpoint, using a Claude model. We use `langchain-openai`'s
-`ChatOpenAI` with a custom `base_url` rather than `langchain-anthropic`
-because OpenRouter speaks the OpenAI API shape, not the Anthropic Messages
-shape.
-
-The model is selected via OPENROUTER_MODEL in .env (default:
-anthropic/claude-opus-4.6-fast). Switching providers later only requires
-changing the env var, not any code in the nodes/agents.
+All LLM calls in this project go through the local Ollama OpenAI-compatible
+endpoint. The default model is `qwen3:1.7b`; override it with OLLAMA_MODEL in
+.env if a different local model is needed.
 """
 from __future__ import annotations
 
@@ -20,21 +14,24 @@ from email_agent.config import CONFIG
 
 
 @lru_cache(maxsize=4)
-def get_chat_model(temperature: float = 0.4, max_tokens: int = 1024) -> ChatOpenAI:
-    if not CONFIG.openrouter_api_key:
-        raise RuntimeError(
-            "OPENROUTER_API_KEY is not set. Copy .env.example to .env and fill it in."
-        )
+def get_chat_model(
+    temperature: float = 0.4,
+    max_tokens: int = 1024,
+    model: str | None = None,
+) -> ChatOpenAI:
     return ChatOpenAI(
-        model=CONFIG.openrouter_model,
-        api_key=CONFIG.openrouter_api_key,
-        base_url=CONFIG.openrouter_base_url,
+        model=model or CONFIG.ollama_model,
+        api_key="ollama",
+        base_url=CONFIG.ollama_base_url,
         temperature=temperature,
         max_tokens=max_tokens,
-        # OpenRouter recommends sending these headers so calls are attributed
-        # correctly on their dashboard. They are optional and harmless.
-        default_headers={
-            "HTTP-Referer": "https://github.com/iconicfounders/email-agent",
-            "X-Title": "IFG Email Drafting Agent",
-        },
+    )
+
+
+@lru_cache(maxsize=2)
+def get_sentiment_chat_model(temperature: float = 0.0, max_tokens: int = 700) -> ChatOpenAI:
+    return get_chat_model(
+        temperature=temperature,
+        max_tokens=max_tokens,
+        model=CONFIG.sentiment_ollama_model,
     )
