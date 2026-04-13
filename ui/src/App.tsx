@@ -5,7 +5,7 @@ import { DraftPreview } from "./components/DraftPreview";
 import { usePipelineRun } from "./hooks/usePipelineRun";
 
 export default function App() {
-  const { state, runFixture, runScan } = usePipelineRun();
+  const { state, runFixture, runScan, updateDraft, approveDraft } = usePipelineRun();
 
   return (
     <div className="app">
@@ -23,7 +23,11 @@ export default function App() {
           <PipelineGraph nodeStatuses={state.nodeStatuses} />
         </div>
         <div className="preview-panel">
-          <DraftPreview state={state} />
+          <DraftPreview
+            state={state}
+            onUpdateDraft={updateDraft}
+            onApproveDraft={approveDraft}
+          />
         </div>
       </div>
     </div>

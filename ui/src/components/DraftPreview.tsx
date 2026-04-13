@@ -2,6 +2,8 @@ import type { PipelineState } from "../types";
 
 interface Props {
   state: PipelineState;
+  onUpdateDraft: (field: "subject" | "body" | "signature", value: string) => void;
+  onApproveDraft: () => void;
 }
 
 /** Render a flat key-value record as readable plain text lines. */
@@ -14,7 +16,7 @@ function renderPlainText(data: Record<string, unknown>): string {
       if (value.length === 0) continue;
       lines.push(`${label}: ${value.join(", ")}`);
     } else if (typeof value === "object") {
-      // Nested object — flatten one level
+      // Nested object -- flatten one level
       const nested = value as Record<string, unknown>;
       lines.push(`${label}:`);
       for (const [k, v] of Object.entries(nested)) {
@@ -29,8 +31,8 @@ function renderPlainText(data: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
-export function DraftPreview({ state }: Props) {
-  const { finalDraft, outlookDraftId, error, nodeDeltas, log } = state;
+export function DraftPreview({ state, onUpdateDraft, onApproveDraft }: Props) {
+  const { finalDraft, outlookDraftId, error, nodeDeltas, log, isRunning, approved } = state;
 
   // Extract intermediate data to show as it arrives
   const context = nodeDeltas["context_extractor"] as Record<string, unknown> | undefined;
@@ -90,10 +92,50 @@ export function DraftPreview({ state }: Props) {
         </div>
       )}
 
-      {/* Final draft */}
-      {finalDraft && (
+      {/* HITL Draft Editor */}
+      {finalDraft && !approved && (
+        <div className="data-section hitl-editor">
+          <div className="section-label">Review and Edit Draft</div>
+          <p className="hitl-hint">
+            Edit the subject, body, or signature below before approving.
+            Nothing is saved until you click Approve and Save.
+          </p>
+          <label className="hitl-field-label">Subject</label>
+          <input
+            className="hitl-input"
+            type="text"
+            value={finalDraft.subject}
+            onChange={(e) => onUpdateDraft("subject", e.target.value)}
+          />
+          <label className="hitl-field-label">Body</label>
+          <textarea
+            className="hitl-textarea"
+            value={finalDraft.body}
+            rows={10}
+            onChange={(e) => onUpdateDraft("body", e.target.value)}
+          />
+          <label className="hitl-field-label">Signature</label>
+          <input
+            className="hitl-input"
+            type="text"
+            value={finalDraft.signature}
+            onChange={(e) => onUpdateDraft("signature", e.target.value)}
+          />
+          <button
+            className="hitl-approve-btn"
+            onClick={onApproveDraft}
+            disabled={isRunning}
+            type="button"
+          >
+            Approve and Save
+          </button>
+        </div>
+      )}
+
+      {/* Approved confirmation */}
+      {finalDraft && approved && (
         <div className="data-section final-draft">
-          <div className="section-label">Final Draft</div>
+          <div className="section-label">Approved Draft</div>
           <div className="draft-subject">Subject: {finalDraft.subject}</div>
           <div className="draft-body">{finalDraft.body}</div>
           <div className="draft-sig">{finalDraft.signature}</div>

@@ -10,6 +10,7 @@ const INITIAL: PipelineState = {
   error: null,
   isRunning: false,
   log: [],
+  approved: false,
 };
 
 export function usePipelineRun() {
@@ -123,5 +124,38 @@ export function usePipelineRun() {
     [start]
   );
 
-  return { state, runFixture, runScan, stop, setNodeStatus };
+  const updateDraft = useCallback(
+    (field: "subject" | "body" | "signature", value: string) => {
+      setState((s) => {
+        if (!s.finalDraft) return s;
+        return {
+          ...s,
+          finalDraft: { ...s.finalDraft, [field]: value },
+        };
+      });
+    },
+    []
+  );
+
+  const approveDraft = useCallback(async () => {
+    if (!state.finalDraft) return;
+    try {
+      const res = await fetch("/api/draft/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state.finalDraft),
+      });
+      const data = await res.json();
+      if (data.error) {
+        addLog(`Approve failed: ${data.error}`);
+      } else {
+        addLog(`Draft approved and saved: ${data.saved_to}`);
+        setState((s) => ({ ...s, approved: true }));
+      }
+    } catch (err) {
+      addLog(`Approve failed: ${err}`);
+    }
+  }, [state.finalDraft]);
+
+  return { state, runFixture, runScan, stop, setNodeStatus, updateDraft, approveDraft };
 }

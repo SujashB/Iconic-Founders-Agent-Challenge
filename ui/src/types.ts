@@ -34,4 +34,5 @@ export interface PipelineState {
   error: string | null;
   isRunning: boolean;
   log: string[];
+  approved: boolean;
 }
