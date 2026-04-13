@@ -1,0 +1,14 @@
+{
+  "kind": "OUTBOUND_FOLLOWUP",
+  "source_ref": "AAMkAGI2-fixture-outbound-001",
+  "detected_at": "2026-04-11T14:32:00Z",
+  "raw_payload": {
+    "subject": "Following up — coverage gap conversation",
+    "recipient_name": "Diane Whitcombe",
+    "recipient_email": "dwhitcombe@buildright-insurance.com",
+    "recipient_org": "BuildRight Insurance Brokerage",
+    "thread_summary": "We sent Diane an introduction 14 days ago after a mutual contact at Highland Capital flagged that several of her construction-services clients were exploring sale processes. No reply since.",
+    "last_outbound_excerpt": "Hi Diane — Bill at Highland mentioned you've been working with a few construction-services owners who are starting to think about exit timing. We've closed three deals in that space in the last 18 months and would be glad to share what we're seeing on multiples and buyer appetite. Would a 20-minute call next week be useful? — Sam",
+    "days_since_last_touch": 14
+  }
+}

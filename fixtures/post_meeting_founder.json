@@ -1,0 +1,21 @@
+{
+  "kind": "POST_MEETING",
+  "source_ref": "AAMkAGI2-fixture-event-002",
+  "detected_at": "2026-04-12T16:40:00Z",
+  "raw_payload": {
+    "subject": "IFG / Apex HVAC - owner call",
+    "organizer_name": "Monica Reyes",
+    "organizer_email": "mreyes@acmewealth.com",
+    "attendees": [
+      "mreyes@acmewealth.com",
+      "sam@iconicfounders.com",
+      "jtorres@apexhvac.com"
+    ],
+    "body": "Intro call between Sam, Monica Reyes from Acme Wealth Partners, and Javier Torres, founder of Apex HVAC. Javier is considering whether to start a sale process in the next 12 months. Discussed recurring maintenance revenue at 38% of sales, a second-layer management team that is improving but not fully independent, and buyer concern around technician retention. Sam offered to send a short buyer-readiness checklist and a view on how recurring maintenance contracts are being valued. Agreed to regroup late next week after Javier reviews the materials with Monica.",
+    "next_steps": [
+      "Sam to send a buyer-readiness checklist",
+      "Sam to share a short note on recurring maintenance contract valuation",
+      "Regroup late next week after Javier and Monica review the materials"
+    ]
+  }
+}

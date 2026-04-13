@@ -1,0 +1,14 @@
+{
+  "kind": "OUTBOUND_FOLLOWUP",
+  "source_ref": "AAMkAGI2-fixture-outbound-003",
+  "detected_at": "2026-04-12T16:30:00Z",
+  "raw_payload": {
+    "subject": "Construction services owner intro",
+    "recipient_name": "Nate Brooks",
+    "recipient_email": "nbrooks@buildright-insurance.com",
+    "recipient_org": "BuildRight Insurance Brokerage",
+    "thread_summary": "We sent Nate an introduction 21 days ago after a construction insurance roundtable where he said several clients were asking about sale readiness. No response.",
+    "last_outbound_excerpt": "Hi Nate - enjoyed the roundtable conversation. You mentioned two construction-services owners asking whether now is a sensible time to prepare for a sale. We have been active in that segment and can share what buyers are pushing on right now. Would a quick call be helpful? - Sam",
+    "days_since_last_touch": 21
+  }
+}

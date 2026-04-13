@@ -1,0 +1,14 @@
+{
+  "kind": "INBOUND_VAGUE",
+  "source_ref": "AAMkAGI2-fixture-inbound-002",
+  "detected_at": "2026-04-12T16:10:00Z",
+  "raw_payload": {
+    "subject": "Introduction",
+    "sender_name": "Priya Shah",
+    "sender_email": "pshah@cepa-advisors.com",
+    "sender_org": "CEPA Advisors",
+    "sender": "pshah@cepa-advisors.com",
+    "body": "Hi Sam,\n\nA partner suggested I should get connected with IFG. I work with several founder-owned services companies and thought it could be useful for us to compare notes sometime.\n\nOpen to connecting next week?\n\nBest,\nPriya",
+    "thread_summary": "First-touch email from a CEPA advisor. No client, transaction, or specific reason for the meeting is provided."
+  }
+}
