@@ -1,0 +1,3 @@
+# What's Next
+
+The next phase of this project is to build a CRM pipeline integration that connects directly to the firm's deal flow. When a new connection request comes in, the system will automatically read the associated email thread, extract key details about the prospective client and their situation, and generate a detailed action plan for the advisory team. This plan will outline recommended next steps — who should reach out, what qualifying questions to ask, and how to position IFG's services based on the context of the introduction. The goal is to move from drafting individual emails to orchestrating the full early-stage relationship workflow, so advisors spend less time on intake logistics and more time on the conversations that close deals.

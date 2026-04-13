@@ -16,6 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from email_agent.config import CONFIG
@@ -108,6 +109,44 @@ async def mcp_tools():
     except Exception as exc:
         log.error("mcp tools listing failed: %s", exc)
         return {"error": str(exc), "tools": []}
+
+
+class ApprovedDraft(BaseModel):
+    subject: str
+    body: str
+    signature: str
+
+
+@app.post("/api/draft/approve")
+async def approve_draft(draft: ApprovedDraft):
+    """Save a human-reviewed (and possibly edited) draft to disk and optionally Outlook."""
+    rendered = (
+        f"# Approved Draft\n\n"
+        f"**Subject:** {draft.subject}\n\n"
+        f"---\n\n"
+        f"{draft.body}\n\n"
+        f"{draft.signature}\n"
+    )
+    out_path = CONFIG.outputs_dir / f"approved_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.md"
+    out_path.write_text(rendered)
+    log.info("approved draft written to %s", out_path)
+
+    # Try writing to Outlook Drafts if connected
+    outlook_id = None
+    try:
+        from email_agent.tools.o365 import get_tool
+        create_tool = get_tool("create_email_draft") or get_tool("O365CreateDraftMessage")
+        if create_tool is not None:
+            body_html = draft.body.replace("\n", "<br>") + "<br><br>" + draft.signature.replace("\n", "<br>")
+            result = create_tool.invoke({"subject": draft.subject, "body": body_html, "to": []})
+            outlook_id = str(result)
+    except Exception as exc:
+        log.warning("outlook draft creation skipped: %s", exc)
+
+    return {
+        "saved_to": str(out_path),
+        "outlook_draft_id": outlook_id,
+    }
 
 
 @app.get("/api/run/fixture/{name}")

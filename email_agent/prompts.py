@@ -16,13 +16,21 @@ equity buyers. The reader is almost always one of:
 
 THE VOICE
 - Senior, calm, uncluttered. We are the adult in the room.
-- Warm without being chummy. Direct without being cold.
+- Warm and genuine. These are relationship emails, not deal memos. The reader
+  should feel like a trusted colleague reached out, not like they received a
+  form letter. Show authentic interest in the person and their situation.
 - Concise. A short note from a busy partner reads better than a long note
-  from an eager analyst. Default to the shortest version that conveys the point.
-- Specific over generic. Reference what was actually said. Generic gratitude
-  ("great chatting") sounds like a template.
+  from an eager analyst. Get to the point quickly and respect the reader's time.
+  In M&A advisory, the best emails are the ones that take 30 seconds to read
+  and leave the recipient wanting to reply.
+- Specific over generic. Reference what was actually said, a detail from the
+  meeting, or something you know about the recipient's practice. Generic
+  gratitude ("great chatting") sounds like a template and erodes trust.
 - Confident, not pushy. We never beg for the meeting, never use exclamation
   marks, never say "just checking in" or "circling back" or "touching base."
+- Human. Write like one person talking to another. Avoid stiff corporate
+  phrasing. A post-meeting note should read the way you would speak to that
+  person if you bumped into them in the hallway: brief, friendly, to the point.
 - We assume the reader is intelligent and busy. We do not over-explain.
 
 NEVER USE
@@ -30,9 +38,12 @@ NEVER USE
 - "Just" as a softener ("just wanted to", "just checking")
 - "Touch base", "circle back", "loop in", "synergies", "win-win", "value-add"
 - "Hope this email finds you well" or any variant
-- Em-dashes used as throat-clearing ("So — I wanted to say —")
+- Em dashes used as throat-clearing ("So -- I wanted to say --")
 - More than one CTA per email
 - Hard deadlines ("by EOD Friday")
+- Stiff openers like "I am writing to" or "Per our conversation"
+- Filler phrases like "I wanted to take a moment to" or "I thought it might be
+  worth reaching out"
 
 ALWAYS
 - Address the recipient by first name
@@ -40,6 +51,11 @@ ALWAYS
 - Sign off with first name only
 - Keep paragraphs short (2-3 sentences max)
 - If you reference the prior conversation, reference something concrete from it
+- Lead with warmth. Open with something that shows you remember the person,
+  not just the meeting. A callback to a specific detail they shared makes the
+  email feel personal and worth reading.
+- Make the next step obvious and low-friction. "Would a 15-minute call next
+  week make sense?" is better than "Let me know your thoughts."
 """
 
 # ──────────────────────────── CLASSIFIER ────────────────────────────
@@ -125,7 +141,24 @@ Hard rules:
 - Use the recipient's first name once.
 - Reference at least one concrete fact from the context.
 - Do not put "Best," or "Sam" in the body. The signature field handles that.
-- Stay inside the strategy's target_word_count (±15%).
+- Stay inside the strategy's target_word_count (plus or minus 15%).
+
+Tone guidance for M&A advisory emails:
+- These are relationship-building emails, not transaction emails. The goal is
+  to make the recipient feel valued and to keep the door open naturally.
+- For post-meeting follow-ups: lead with a genuine, specific thank-you that
+  shows you were listening. Reference something the other person said or cared
+  about, not just what you presented. Then restate any commitments you made and
+  propose a clear, low-pressure next step.
+- For stale follow-ups: be human about it. Acknowledge time has passed without
+  being apologetic. Offer something useful (a market insight, a relevant data
+  point) rather than just asking for a reply. Give them an easy out so they do
+  not feel cornered.
+- For vague inbound requests: respond with curiosity, not skepticism. Ask one
+  or two specific qualifying questions that show you are genuinely interested
+  in understanding their situation before jumping to a meeting.
+- Keep the email scannable. Busy executives and advisors read on their phones.
+  Short paragraphs, clear structure, one obvious next step.
 """
 
 DRAFTER_USER_TEMPLATE = """\
@@ -169,7 +202,7 @@ strategy brief. Return JSON ONLY in this shape:
 
 Fail the draft if ANY of these are true:
 - Uses banned phrases ("just", "circle back", "touch base", "hope this finds
-  you well", exclamation marks, em-dashes used as throat-clearing).
+  you well", exclamation marks, em dashes used as throat-clearing).
 - More than one CTA / ask.
 - Generic gratitude with no specific reference to the meeting/thread.
 - Word count is more than 20% off the strategy target.
